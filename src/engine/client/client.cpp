@@ -3281,6 +3281,16 @@ void CClient::DemoSlice(const char *pDstPath, CLIENTFUNC_FILTER pfnFilter, void 
 	}
 }
 
+char *CClient::DemoPlayer_Error()
+{
+	return m_DemoPlayer.PlaybackError();
+}
+
+void CClient::DemoPlayer_ClearError()
+{
+	m_DemoPlayer.ClearPlaybackError();
+}
+
 const char *CClient::DemoPlayer_Play(const char *pFilename, int StorageType)
 {
 	int Crc;
@@ -3326,6 +3336,8 @@ const char *CClient::DemoPlayer_Play(const char *pFilename, int StorageType)
 
 	// enter demo playback state
 	SetState(IClient::STATE_DEMOPLAYBACK);
+
+	dbg_msg("demo", "Before we play");
 
 	m_DemoPlayer.Play();
 	GameClient()->OnEnterGame();

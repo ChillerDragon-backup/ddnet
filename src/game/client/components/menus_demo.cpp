@@ -812,12 +812,22 @@ void CMenus::FetchAllHeaders()
 
 void CMenus::RenderDemoList(CUIRect MainView)
 {
+
 	static int s_Inited = 0;
 	if(!s_Inited)
 	{
 		DemolistPopulate();
 		DemolistOnUpdate(true);
 		s_Inited = 1;
+	}
+
+	// render error popup
+	if(strlen(Client()->DemoPlayer_Error()) > 0)
+	{
+		PopupMessage("Playback error", Client()->DemoPlayer_Error(), "Oh shit!");
+		Client()->DemoPlayer_ClearError();
+		m_lBuggyDemos.push_back(m_DemolistSelectedIndex);
+		m_lBuggyDemos.unique();
 	}
 
 	char aFooterLabel[128] = {0};
@@ -838,7 +848,7 @@ void CMenus::RenderDemoList(CUIRect MainView)
 	RenderTools()->DrawUIRect(&MainView, ms_ColorTabbarActive, CUI::CORNER_B, 10.0f);
 	MainView.Margin(10.0f, &MainView);
 
-	CUIRect ButtonBar, RefreshRect, FetchRect, PlayRect, DeleteRect, RenameRect, LabelRect, ListBox;
+	CUIRect ButtonBar, RefreshRect, FetchRect, PlayRect, DeleteRect, RenameRect, FixRect, LabelRect, ListBox;
 	MainView.HSplitBottom(ms_ButtonHeight+5.0f, &MainView, &ButtonBar);
 	ButtonBar.HSplitTop(5.0f, 0, &ButtonBar);
 	ButtonBar.VSplitRight(110.0f, &ButtonBar, &PlayRect);
@@ -849,6 +859,8 @@ void CMenus::RenderDemoList(CUIRect MainView)
 	ButtonBar.VSplitLeft(110.0f, &DeleteRect, &ButtonBar);
 	ButtonBar.VSplitLeft(10.0f, 0, &ButtonBar);
 	ButtonBar.VSplitLeft(110.0f, &RenameRect, &ButtonBar);
+	ButtonBar.VSplitLeft(10.0f, 0, &ButtonBar);
+	ButtonBar.VSplitLeft(110.0f, &FixRect, &ButtonBar);
 	ButtonBar.VSplitLeft(10.0f, 0, &ButtonBar);
 	ButtonBar.VSplitLeft(110.0f, &LabelRect, &ButtonBar);
 	MainView.HSplitBottom(140.0f, &ListBox, &MainView);
@@ -1244,7 +1256,10 @@ void CMenus::RenderDemoList(CUIRect MainView)
 				str_format(aBuf, sizeof(aBuf), "%s/%s", m_aCurrentDemoFolder, m_lDemos[m_DemolistSelectedIndex].m_aFilename);
 				const char *pError = Client()->DemoPlayer_Play(aBuf, m_lDemos[m_DemolistSelectedIndex].m_StorageType);
 				if(pError)
+				{
+					dbg_msg("demo", "error loading demo: '%s'", pError);
 					PopupMessage(Localize("Error"), str_comp(pError, "error loading demo") ? pError : Localize("Error loading demo"), Localize("Ok"));
+				}
 				else
 				{
 					UI()->SetActiveItem(0);
@@ -1276,6 +1291,21 @@ void CMenus::RenderDemoList(CUIRect MainView)
 				m_Popup = POPUP_RENAME_DEMO;
 				str_copy(m_aCurrentDemoFile, m_lDemos[m_DemolistSelectedIndex].m_aFilename, sizeof(m_aCurrentDemoFile));
 				return;
+			}
+		}
+
+		bool IsDemoBuggy = (std::find(m_lBuggyDemos.begin(), m_lBuggyDemos.end(), m_DemolistSelectedIndex) != m_lBuggyDemos.end());
+
+		if(m_DemolistSelectedIndex >= 0 && IsDemoBuggy)
+		{
+			static int s_FixButton = 0;
+			if(DoButton_Menu(&s_FixButton, Localize("Fix pls"), 0, &FixRect))
+			{
+				if(m_DemolistSelectedIndex >= 0)
+				{
+					UI()->SetActiveItem(0);
+					return;
+				}
 			}
 		}
 	}

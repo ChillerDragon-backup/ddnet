@@ -227,6 +227,8 @@ class CMenus : public CComponent
 	bool m_DemolistSelectedIsDir;
 	int m_DemolistStorageType;
 
+	std::list<int> m_lBuggyDemos;
+
 	void DemolistOnUpdate(bool Reset);
 	//void DemolistPopulate();
 	static int DemolistFetchCallback(const char *pName, time_t Date, int IsDir, int StorageType, void *pUser);

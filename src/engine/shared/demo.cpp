@@ -511,6 +511,8 @@ void CDemoPlayer::DoTick()
 	int DataSize = 0;
 	int GotSnapshot = 0;
 
+	m_pPlaybackError = "";
+
 	// update ticks
 	m_Info.m_PreviousTick = m_Info.m_Info.m_CurrentTick;
 	m_Info.m_Info.m_CurrentTick = m_Info.m_NextTick;
@@ -539,6 +541,7 @@ void CDemoPlayer::DoTick()
 			{
 				// stop on error or eof
 				m_pConsole->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "demo_player", "error reading chunk");
+				m_pPlaybackError = "Error reading chunk";
 				Stop();
 				break;
 			}
@@ -548,6 +551,7 @@ void CDemoPlayer::DoTick()
 			{
 				// stop on error or eof
 				m_pConsole->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "demo_player", "error during network decompression");
+				m_pPlaybackError = "Error during network decompression";
 				Stop();
 				break;
 			}
@@ -557,6 +561,7 @@ void CDemoPlayer::DoTick()
 			if(DataSize < 0)
 			{
 				m_pConsole->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "demo_player", "error during intpack decompression");
+				m_pPlaybackError = "Error during intpack decompression";
 				Stop();
 				break;
 			}

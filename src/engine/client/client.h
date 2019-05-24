@@ -367,6 +367,8 @@ public:
 
 	void RegisterCommands();
 
+	char *DemoPlayer_Error();
+	void DemoPlayer_ClearError();
 	const char *DemoPlayer_Play(const char *pFilename, int StorageType);
 	void DemoRecorder_Start(const char *pFilename, bool WithTimestamp, int Recorder);
 	void DemoRecorder_HandleAutoStart();

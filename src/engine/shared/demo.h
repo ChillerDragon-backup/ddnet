@@ -108,6 +108,8 @@ private:
 	CMapInfo m_MapInfo;
 	int m_SpeedIndex;
 
+	char *m_pPlaybackError = "";
+
 	CPlaybackInfo m_Info;
 	int m_DemoType;
 	unsigned char m_aLastSnapshotData[CSnapshot::MAX_SIZE];
@@ -140,6 +142,9 @@ public:
 	bool GetDemoInfo(class IStorage *pStorage, const char *pFilename, int StorageType, CDemoHeader *pDemoHeader, CTimelineMarkers *pTimelineMarkers) const;
 	const char *GetDemoFileName() { return m_aFilename; };
 	int GetDemoType() const;
+
+	char *PlaybackError() { return m_pPlaybackError; }
+	void ClearPlaybackError() { m_pPlaybackError = ""; }
 
 	int Update(bool RealTime=true);
 

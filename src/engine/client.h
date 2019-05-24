@@ -179,6 +179,9 @@ public:
 
 	//DDRace
 
+	virtual char *DemoPlayer_Error() = 0;
+	virtual void DemoPlayer_ClearError() = 0;
+
 	virtual const char *GetCurrentMap() = 0;
 	virtual const char *GetCurrentMapPath() = 0;
 	virtual unsigned GetMapCrc() = 0;
