@@ -204,6 +204,10 @@ class CClient : public IClient, public CDemoPlayer::IListener
 
 	class CSnapshotDelta m_SnapshotDelta;
 
+	// Replays
+	class CSnapshotStorage m_ReplaySnapshotStorage;
+	TStaticRingBuffer<CSnapshot, 30 * 50 * 64 * 1024, CRingBufferBase::FLAG_RECYCLE> m_ReplayBuffer;
+	CSnapshot *m_pReplayEntry;
 	std::list<std::shared_ptr<CDemoEdit>> m_EditJobs;
 
 	//

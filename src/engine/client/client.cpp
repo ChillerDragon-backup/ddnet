@@ -344,6 +344,9 @@ CClient::CClient() : m_DemoPlayer(&m_SnapshotDelta)
 	mem_zero(m_aSnapshots, sizeof(m_aSnapshots));
 	m_SnapshotStorage[0].Init();
 	m_SnapshotStorage[1].Init();
+
+	m_ReplaySnapshotStorage.Init();
+
 	m_ReceivedSnapshots[0] = 0;
 	m_ReceivedSnapshots[1] = 0;
 	m_SnapshotParts[0] = 0;
@@ -608,6 +611,7 @@ void CClient::OnEnterGame()
 	m_aSnapshots[g_Config.m_ClDummy][SNAP_CURRENT] = 0;
 	m_aSnapshots[g_Config.m_ClDummy][SNAP_PREV] = 0;
 	m_SnapshotStorage[g_Config.m_ClDummy].PurgeAll();
+	m_ReplaySnapshotStorage.PurgeAll();
 	m_ReceivedSnapshots[g_Config.m_ClDummy] = 0;
 	m_SnapshotParts[g_Config.m_ClDummy] = 0;
 	m_PredTick[g_Config.m_ClDummy] = 0;
@@ -1887,9 +1891,11 @@ void CClient::ProcessServerPacket(CNetChunk *pPacket)
 					if(m_aSnapshots[g_Config.m_ClDummy][SNAP_CURRENT] && m_aSnapshots[g_Config.m_ClDummy][SNAP_CURRENT]->m_Tick < PurgeTick)
 						PurgeTick = m_aSnapshots[g_Config.m_ClDummy][SNAP_CURRENT]->m_Tick;
 					m_SnapshotStorage[g_Config.m_ClDummy].PurgeUntil(PurgeTick);
+					m_ReplaySnapshotStorage.PurgeUntil(PurgeTick);
 
 					// add new
 					m_SnapshotStorage[g_Config.m_ClDummy].Add(GameTick, time_get(), SnapSize, pTmpBuffer3, 1);
+					m_ReplaySnapshotStorage.Add(GameTick, time_get(), SnapSize, pTmpBuffer3, 1);
 
 					// for antiping: if the projectile netobjects from the server contains extra data, this is removed and the original content restored before recording demo
 					unsigned char aExtraInfoRemoved[CSnapshot::MAX_SIZE];
@@ -1907,6 +1913,14 @@ void CClient::ProcessServerPacket(CNetChunk *pPacket)
 							// write snapshot
 							m_DemoRecorder[i].RecordSnapshot(GameTick, aExtraInfoRemoved, SnapSize);
 						}
+					}
+
+					// replay: add snapshot to ringbuffer
+					if(g_Config.m_ClRaceReplays)
+					{
+						//dbg_msg("replay", "snapsize: %d", SnapSize);
+						CSnapshot *pSnapshot = m_ReplayBuffer.Allocate(sizeof(CSnapshot) + SnapSize);
+						mem_copy(pSnapshot, aExtraInfoRemoved, SnapSize);
 					}
 
 					// apply snapshot, cycle pointers
@@ -2730,6 +2744,7 @@ void CClient::InitInterfaces()
 	m_pStorage = Kernel()->RequestInterface<IStorage>();
 
 	m_DemoEditor.Init(m_pGameClient->NetVersion(), &m_SnapshotDelta, m_pConsole, m_pStorage);
+	m_ReplayBuffer.Init();
 
 	m_ServerBrowser.SetBaseInfo(&m_NetClient[2], m_pGameClient->NetVersion());
 
@@ -2858,6 +2873,9 @@ void CClient::Run()
 
 	// process pending commands
 	m_pConsole->StoreCommands(false);
+
+	// replay: init buffer
+	m_ReplayBuffer.Init();
 
 #if defined(CONF_FAMILY_UNIX)
 	m_Fifo.Init(m_pConsole, g_Config.m_ClInputFifo, CFGFLAG_CLIENT);
@@ -3318,34 +3336,71 @@ void CClient::SaveReplay()
 	}
 	else
 	{
-		if(!DemoRecorder(RECORDER_REPLAYS)->IsRecording())
-		{
-			m_pConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "replay", "Error: demorecorder isn't recording. Try to rejoin to fix that.");
-		}
-		else
-		{
+		//if(!DemoRecorder(RECORDER_REPLAYS)->IsRecording())
+		//{
+		//	m_pConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "replay", "Error: demorecorder isn't recording. Try to rejoin to fix that.");
+		//}
+		//else
+		//{
 			// First we stop the recorder to slice correctly the demo after
-			DemoRecorder_Stop(RECORDER_REPLAYS);
-			char aFilename[256];
+			//DemoRecorder_Stop(RECORDER_REPLAYS);
 
-			char aDate[64];
-			str_timestamp(aDate, sizeof(aDate));
+		class CDemoRecorder ReplayRecorder = CDemoRecorder(&m_SnapshotDelta);
+		
+		char aFilename[256];
 
-			str_format(aFilename, sizeof(aFilename), "demos/replays/%s_%s (replay).demo", m_aCurrentMap, aDate);
-			char *pSrc = (&m_DemoRecorder[RECORDER_REPLAYS])->GetCurrentFilename();
+		char aDate[64];
+		str_timestamp(aDate, sizeof(aDate));
 
-			// Slice the demo to get only the last cl_replay_length seconds
-			const int EndTick = GameTick();
-			const int StartTick = EndTick - g_Config.m_ClReplayLength * GameTickSpeed();
+		str_format(aFilename, sizeof(aFilename), "demos/replays/%s_%s (replay).demo", m_aCurrentMap, aDate);
 
-			// Create a job to do this slicing in background because it can be a bit long depending on the file size
-			std::shared_ptr<CDemoEdit> pDemoEditTask = std::make_shared<CDemoEdit>(GameClient()->NetVersion(), &m_SnapshotDelta, m_pConsole, m_pStorage, pSrc, aFilename, StartTick, EndTick);
-			Engine()->AddJob(pDemoEditTask);
-			m_EditJobs.push_back(pDemoEditTask);
+		ReplayRecorder.Start(Storage(), m_pConsole, aFilename, GameClient()->NetVersion(), m_aCurrentMap, m_pMap->Sha256(), m_pMap->Crc(), "client", m_pMap->MapSize(), 0, m_pMap->File());
 
-			// And we restart the recorder
-			DemoRecorder_StartReplayRecorder();
+		
+
+		//CSnapshot *pEntry = m_ReplayBuffer.First();
+
+		dbg_msg("replay", "number of snapshots in buffer: %d", m_ReplayBuffer.Allocations());
+
+		int Number = m_ReplayBuffer.Allocations();
+		CSnapshot *ppSnapshots = (CSnapshot *) malloc(Number * sizeof(CSnapshot));
+
+		int i = 0;
+		for(CSnapshot *pEnt = m_ReplayBuffer.First(); pEnt != m_ReplayBuffer.Last(); pEnt = m_ReplayBuffer.Next(pEnt))
+		{
+			ppSnapshots[i++] = *pEnt;
 		}
+
+		for(int a = 0; a < Number; a++)
+		{
+			ReplayRecorder.RecordSnapshot(a, &ppSnapshots[a], ppSnapshots[a].GetDataSize());
+		}
+
+		//ReplayRecorder.RecordSnapshot(0, pEntry, pEntry->GetDataSize());
+		//for(int i = 1; i < m_ReplayBuffer.Allocations(); i++)
+		//{
+		//	pEntry = m_ReplayBuffer.Next(pEntry);
+		//	ReplayRecorder.RecordSnapshot(i, pEntry, pEntry->GetDataSize());
+		//}
+
+		ReplayRecorder.Stop();
+
+		//ReplayRecorder.RecordSnapshot(0, m_ReplayBuffer.First(), m_ReplayBuffer.First()->GetDataSize());
+
+		//char *pSrc = (&m_DemoRecorder[RECORDER_REPLAYS])->GetCurrentFilename();
+
+		// Slice the demo to get only the last cl_replay_length seconds
+		//const int EndTick = GameTick();
+		//const int StartTick = EndTick - g_Config.m_ClReplayLength * GameTickSpeed();
+
+		//// Create a job to do this slicing in background because it can be a bit long depending on the file size
+		//std::shared_ptr<CDemoEdit> pDemoEditTask = std::make_shared<CDemoEdit>(GameClient()->NetVersion(), &m_SnapshotDelta, m_pConsole, m_pStorage, pSrc, aFilename, StartTick, EndTick);
+		//Engine()->AddJob(pDemoEditTask);
+		//m_EditJobs.push_back(pDemoEditTask);
+
+		//	// And we restart the recorder
+		//	DemoRecorder_StartReplayRecorder();
+		////}
 	}
 }
 
@@ -3494,6 +3549,7 @@ void CClient::DemoRecorder_HandleAutoStart()
 
 void CClient::DemoRecorder_StartReplayRecorder()
 {
+	return;
 	if(g_Config.m_ClRaceReplays)
 	{
 		DemoRecorder_Stop(RECORDER_REPLAYS);

@@ -55,7 +55,7 @@ void CRingBufferBase::Init(void *pMemory, int Size, int Flags)
 	m_pProduce = m_pFirst;
 	m_pConsume = m_pFirst;
 	m_Flags = Flags;
-
+	m_Allocations = 0;
 }
 
 void *CRingBufferBase::Allocate(int Size)
@@ -121,6 +121,8 @@ void *CRingBufferBase::Allocate(int Size)
 	// set next block
 	m_pProduce = NextBlock(pBlock);
 
+	m_Allocations++;
+
 	// set as used and return the item pointer
 	pBlock->m_Free = 0;
 	return (void *)(pBlock+1);
@@ -148,6 +150,9 @@ int CRingBufferBase::PopFirst()
 	// in the case that we have caught up with the produce pointer
 	// we might stand on a free block so merge em
 	MergeBack(m_pConsume);
+
+	m_Allocations--;
+
 	return 1;
 }
 

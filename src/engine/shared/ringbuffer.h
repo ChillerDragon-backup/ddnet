@@ -24,6 +24,7 @@ class CRingBufferBase
 
 	int m_Size;
 	int m_Flags;
+	int m_Allocations;
 
 	CItem *NextBlock(CItem *pItem);
 	CItem *PrevBlock(CItem *pItem);
@@ -38,6 +39,7 @@ protected:
 
 	void Init(void *pMemory, int Size, int Flags);
 	int PopFirst();
+	int Allocations() { return m_Allocations; }
 public:
 	enum
 	{
@@ -62,6 +64,8 @@ public:
 	T *Next(T *pCurrent) { return (T*)CRingBufferBase::Next(pCurrent); }
 	T *First() { return (T*)CRingBufferBase::First(); }
 	T *Last() { return (T*)CRingBufferBase::Last(); }
+
+	int Allocations() { return CRingBufferBase::Allocations(); }
 };
 
 #endif
